@@ -10,6 +10,7 @@ import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+import tempfile
 
 # Function to get video URLs from multiple playlists or individual video links
 def get_video_urls_multiple(input_urls):
@@ -25,30 +26,37 @@ def get_video_urls_multiple(input_urls):
     return video_urls
 
 
-import io
-import yt_dlp
-import subprocess
+def download_video(video_url, output_dir="downloads"):
+    with tempfile.TemporaryDirectory() as temp_dir:
+        output_file_template = os.path.join(temp_dir, '%(title)s.%(ext)s')
 
-def download_video_in_memory(video_url):
     ydl_opts = {
-        'format': 'bestvideo+bestaudio/best',  # Download best quality video and audio
+        'ffmpeg_location': "ffmpeg",
+        'outtmpl': output_file_template,
+        'format': 'bestvideo+bestaudio/best',  # Ensure video and audio are downloaded together
         'quiet': True,
         'no_warnings': True,
-        'outtmpl': '-',  # Output to stdout (memory stream)
-        'noplaylist': True,  # Avoid downloading entire playlist if URL is for one video
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(video_url, download=True)
             filename = ydl.prepare_filename(info_dict)
-            video_data = ydl._fd  # Get the video data from stdout
-
-            return video_data  # Return video data instead of saving to disk
+            if filename and os.path.exists(filename):
+                with open(filename, 'rb') as file:
+                    st.download_button(
+                        label="Download Video",
+                        data=file,
+                        file_name=filename,
+                        mime="video/mp4"
+                    )
+                return filename
+            else:
+                print(f"Failed to retrieve valid filename for {video_url}")
+                return None
     except Exception as e:
         print(f"Download failed for {video_url}: {str(e)}")
         return None
-
 
 
 # Function to get transcript for a video using its YouTube ID
@@ -206,30 +214,13 @@ def extract_timestamps_from_section(section):
         return None  # Return None in case of an error
 
 
-def extract_clip_from_video_data(video_data, start_time, end_time, ffmpeg_location):
-    try:
-        # Use subprocess to pass the video data directly to ffmpeg without saving it
-        temp_output = f"temp_{start_time}_{end_time}.mp4"
-        process = subprocess.Popen(
-            [ffmpeg_location, '-i', 'pipe:0', '-ss', str(start_time), '-to', str(end_time),
-             '-c:v', 'libx264', '-c:a', 'aac', '-strict', 'experimental', '-async', '1', temp_output],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
-
-        # Write the video data to stdin of ffmpeg process
-        process.stdin.write(video_data.read())
-        process.stdin.close()
-
-        process.wait()  # Wait for the process to finish
-        return temp_output  # Return the output file path
-    except Exception as e:
-        print(f"Error processing video data: {e}")
-        return None
-
-
 def extract_clip_with_ffmpeg(video_file, start_time, end_time, ffmpeg_location):
     try:
-        temp_output = f"temp_{start_time}_{end_time}.mp4"
+        # Create a permanent directory to store the clips if it doesn't exist
+        clips_dir = "clips"
+        os.makedirs(clips_dir, exist_ok=True)
+        temp_output = os.path.join(clips_dir, f"clip_{start_time}_{end_time}.mp4")
+
         # Extract both video and audio while ensuring proper sync
         subprocess.run(
             [ffmpeg_location, "-i", video_file, "-ss", str(start_time), "-to", str(end_time),
@@ -241,25 +232,23 @@ def extract_clip_with_ffmpeg(video_file, start_time, end_time, ffmpeg_location):
         return None
 
 
+
 def merge_clips_with_ffmpeg(clips, output_file, ffmpeg_location):
     with open("temp_clips.txt", "w") as file:
         for clip in clips:
             file.write(f"file '{clip}'\n")
 
+    # Specify the directory for the merged output file
+    output_dir = "merged_videos"
+    os.makedirs(output_dir, exist_ok=True)
+    final_output_path = os.path.join(output_dir, output_file)
+
     # Merge clips and ensure that audio-video sync is preserved
     subprocess.run([ffmpeg_location, "-f", "concat", "-safe", "0", "-i", "temp_clips.txt",
-                    "-c:v", "libx264", "-c:a", "aac", "-strict", "experimental", "-async", "1", output_file],
+                    "-c:v", "libx264", "-c:a", "aac", "-strict", "experimental", "-async", "1", final_output_path],
                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-
-def process_video_data_in_memory(video_url, start_time, end_time, ffmpeg_location):
-    video_data = download_video_in_memory(video_url)
-    if not video_data:
-        print("Video download failed.")
-        return None
-
-    edited_video = extract_clip_from_video_data(video_data, start_time, end_time, ffmpeg_location)
-    return edited_video
+    return final_output_path
 
 
 # Use timestamps to extract and combine video clips
@@ -286,7 +275,25 @@ def edit_video_using_query(video_file, query_output, ffmpeg_location):
         if clips:
             final_video_path = "final_output_video.mp4"
             print("Merging clips...")
-            merge_clips_with_ffmpeg(clips, final_video_path, ffmpeg_location)
+            final_video_path = merge_clips_with_ffmpeg(clips, final_video_path, ffmpeg_location)
+
+            # Provide download option for the final video
+            st.download_button(
+                label="Download Final Video",
+                data=open(final_video_path, "rb"),
+                file_name="final_output_video.mp4",
+                mime="video/mp4"
+            )
+
+            # Provide download option for each individual clip
+            for clip in clips:
+                st.download_button(
+                    label=f"Download Clip {os.path.basename(clip)}",
+                    data=open(clip, "rb"),
+                    file_name=os.path.basename(clip),
+                    mime="video/mp4"
+                )
+
             return final_video_path
         else:
             print("No valid clips were found.")
@@ -446,7 +453,7 @@ def main():
 
             for video in st.session_state.stored_transcripts:
                 video_url = video['video_url']
-                video_file = download_video_in_memory(video['video_url'])
+                video_file = download_video(video['video_url'])
                 if not video_file:
                     st.warning(f"Skipping video {video_url} due to download failure.")
                 else:
@@ -455,7 +462,7 @@ def main():
                     status_text.text("Processing will take some time \n Please Have Patience...")
                     st.success(f"Video downloaded successfully: {video_file}")
                     query_output = st.session_state.query_output.split("\n") if st.session_state.query_output else []
-                    edited_video_path = process_video_data_in_memory(video_url, start_time=0, end_time=30, ffmpeg_location="ffmpeg")
+                    edited_video_path = edit_video_using_query(video_file, query_output, "ffmpeg")
                     if edited_video_path:
                         progress_bar.progress(100, text="Video combined and ready.")
                         status_text.text("Video combined and ready.")
