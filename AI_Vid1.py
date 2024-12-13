@@ -25,6 +25,39 @@ def get_video_urls_multiple(input_urls):
             video_urls.append(url)  # Treat as a single video URL
     return video_urls
 
+# Function to check if a video is under Creative Commons license using YouTube Data API and description
+def is_creative_commons(video_url):
+    try:
+        # Check using yt-dlp
+        ydl_opts = {'quiet': True, 'no_warnings': True, 'skip_download': True, 'force_generic_extractor': True}
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(video_url, download=False)
+            license_type_yt_dlp = info.get("license", "").lower()  # Extract license field
+            if "creative commons" in license_type_yt_dlp:
+                return True
+    except Exception as e:
+        st.warning(f"yt-dlp failed to check license: {str(e)}")
+
+    try:
+        # Check using YouTube Data API
+        video_id = video_url.split("v=")[-1]  # Extract video ID from URL
+        youtube = build("youtube", "v3",
+                        developerKey="AIzaSyBMStdaXfemSDBRANoaLYQTi6qB_u2aJlk")  # Replace with your API key
+        video_response = youtube.videos().list(part="snippet,contentDetails", id=video_id).execute()
+
+        if video_response['items']:
+            # Check for Creative Commons license in video metadata
+            license_type_api = video_response['items'][0]['contentDetails'].get('license', '').lower()
+            description = video_response['items'][0]['snippet']['description'].lower()  # Video description
+
+            # Check if the license type is 'creativeCommon' or the description contains specific CC text
+            if license_type_api == 'creativecommon' or "creative commons attribution licence (reuse allowed)" in description:
+                return True
+    except Exception as e:
+        st.warning(f"YouTube Data API failed to check license: {str(e)}")
+
+    return False
+
 
 def download_video(video_url, output_dir="downloads"):
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -453,25 +486,28 @@ def main():
 
             for video in st.session_state.stored_transcripts:
                 video_url = video['video_url']
-                video_file = download_video(video['video_url'])
-                if not video_file:
-                    st.warning(f"Skipping video {video_url} due to download failure.")
+                if not is_creative_commons(video_url):
+                    st.warning(f"Video {video_url} cannot be processed due to licensing restrictions.")
                 else:
-                    status_text.text("Downloading video...")
-                    progress_bar.progress(50, text="Video downloaded successfully...")
-                    status_text.text("Processing will take some time \n Please Have Patience...")
-                    st.success(f"Video downloaded successfully: {video_file}")
-                    query_output = st.session_state.query_output.split("\n") if st.session_state.query_output else []
-                    edited_video_path = edit_video_using_query(video_file, query_output, "ffmpeg")
-                    if edited_video_path:
-                        progress_bar.progress(100, text="Video combined and ready.")
-                        status_text.text("Video combined and ready.")
-                        st.success(f"Edited video saved at: {edited_video_path}")
-                        print('Final Video Created')
-                        st.video(edited_video_path)
-                        st.session_state.processing_in_progress = False
+                    video_file = download_video(video['video_url'])
+                    if not video_file:
+                        st.warning(f"Skipping video {video_url} due to download failure.")
                     else:
-                        st.warning("No video could be edited from the query output.")
+                        status_text.text("Downloading video...")
+                        progress_bar.progress(50, text="Video downloaded successfully...")
+                        status_text.text("Processing will take some time \n Please Have Patience...")
+                        st.success(f"Video downloaded successfully: {video_file}")
+                        query_output = st.session_state.query_output.split("\n") if st.session_state.query_output else []
+                        edited_video_path = edit_video_using_query(video_file, query_output, "ffmpeg")
+                        if edited_video_path:
+                            progress_bar.progress(100, text="Video combined and ready.")
+                            status_text.text("Video combined and ready.")
+                            st.success(f"Edited video saved at: {edited_video_path}")
+                            print('Final Video Created')
+                            st.video(edited_video_path)
+                            st.session_state.processing_in_progress = False
+                        else:
+                            st.warning("No video could be edited from the query output.")
 
     if st.button("Process Another Playlist/Video"):
         st.session_state.stored_transcripts = []
