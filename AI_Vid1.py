@@ -11,8 +11,6 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 
-ffmpeg_path = 'C:\\Users\\Vaishali\\PycharmProjects\\AI\\ffmpeg\\bin\\ffmpeg.exe'
-
 # Function to get video URLs from multiple playlists or individual video links
 def get_video_urls_multiple(input_urls):
     video_urls = []
@@ -34,7 +32,7 @@ def download_video(video_url, output_dir="downloads"):
     output_file_template = os.path.join(output_dir, '%(title)s.%(ext)s')
 
     ydl_opts = {
-        'ffmpeg_location': ffmpeg_path,
+        'ffmpeg_location': "ffmpeg",
         'outtmpl': output_file_template,
         'format': 'bestvideo+bestaudio/best',  # Ensure video and audio are downloaded together
         'quiet': True,
