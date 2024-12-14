@@ -1,30 +1,40 @@
 import streamlit as st
 import yt_dlp
-from pytube import Playlist
+from pytube import Playlist, YouTube
 from sklearn.metrics.pairwise import cosine_similarity
 from youtube_transcript_api import YouTubeTranscriptApi
 from sklearn.feature_extraction.text import TfidfVectorizer
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from moviepy import VideoFileClip
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from moviepy.video.compositing.concatenate import concatenate_videoclips
+import numpy as np
+from googleapiclient.discovery import build
 import os
-import time
-import io
-import yt_dlp
 import subprocess
-import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
 
 # Configure logging for better visibility in production
 logging.basicConfig(level=logging.INFO)
-from pytube import Playlist
-import logging
-from youtube_transcript_api._errors import (
-    TranscriptsDisabled,
-    VideoUnavailable,
-    NoTranscriptFound
-)
+
+# Set up Streamlit page
+def initialize_ui():
+    st.sidebar.header("Upload Your Cookies File \n (Open Chrome and go to the YouTube page you want to download from (make sure you're logged in).\n
+Press F12 or Ctrl + Shift + I (Windows) or Cmd + Option + I (Mac) to open Developer Tools.\n
+Alternatively, you can right-click anywhere on the webpage and select Inspect or Inspect Element.\n
+Go to the Application tab and find Cookies on the left-hand menu under Storage.\n
+Click on the Cookies item and find the relevant entries for YouTube.\n
+Export these cookies using a browser extension like EditThisCookie or another cookie-exporting tool.\n
+Save the cookies to a file, for example, cookies.txt")
+    
+
+# Upload cookies file
+def upload_cookies():
+    cookies_file = st.sidebar.file_uploader("Upload cookies.txt", type=['txt'])
+
+    if cookies_file:
+        with open("cookies.txt", "wb") as f:
+            f.write(cookies_file.read())
+        st.sidebar.success("Cookies file uploaded successfully!")
+        return "cookies.txt"
+    return None
 
 def get_video_urls_multiple(input_urls):
     video_urls = []
@@ -43,38 +53,36 @@ def get_video_urls_multiple(input_urls):
     return video_urls
 
 
-def download_video(video_url):
-    """
-    Downloads a video using yt_dlp and creates a Streamlit download button for it.
-    """
+# Download YouTube video
+def download_video(url, cookies_file):
+    yt = YouTube(url, use_oauth=False, allow_oauth_cache=True, cookies=cookies_file)
+    video_stream = yt.streams.get_highest_resolution()
+    output_file = video_stream.download(output_path="downloads")
+    st.success(f"Downloaded: {yt.title}")
+    return output_file
+
+# Process video using FFmpeg
+def trim_video_ffmpeg(input_file, start_time, end_time):
+    base, ext = os.path.splitext(input_file)
+    output_file = f"{base}_trimmed{ext}"
+
+    command = [
+        "ffmpeg",
+        "-i", input_file,
+        "-ss", str(start_time),
+        "-to", str(end_time),
+        "-c:v", "copy",
+        "-c:a", "copy",
+        output_file
+    ]
+
     try:
-        buffer = io.BytesIO()  # Create an in-memory bytes buffer for the video file
-        ydl_opts = {
-            'format': 'bestvideo+bestaudio/best',  # Download best video and audio
-            'quiet': True,  # Suppress yt-dlp logs
-            'outtmpl': '-',  # Output to stdout
-        }
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(video_url, download=False)  # Get metadata
-            ydl.download([video_url])  # Download the video
-
-            filename = ydl.prepare_filename(info_dict)
-            with open(filename, 'rb') as f:
-                buffer.write(f.read())  # Read the downloaded video into memory
-                buffer.seek(0)  # Reset the buffer position
-
-        # Provide the video as a download button in Streamlit
-        st.download_button(
-            label="Download Video",
-            data=buffer,
-            file_name=f"{info_dict['title']}.mp4",
-            mime="video/mp4"
-        )
-        return filename
-
-    except Exception as e:
-        st.error(f"Failed to download video: {e}")
+        subprocess.run(command, check=True)
+        st.success("Video trimmed successfully!")
+        return output_file
+    except subprocess.CalledProcessError as e:
+        st.error("Error during video trimming!")
+        st.error(e)
         return None
 
 def get_transcript(video_url):
@@ -548,11 +556,10 @@ def combine_and_play_video(input_urls, progress_bar, status_text):
         return None
 
 
-
-
+# Main functionality
 def main():
     st.set_page_config(page_title="Video & Playlist Processor", page_icon="🎬", layout="wide")
-
+    
     st.markdown("""
     <style>
         .css-1d391kg {padding: 30px;}
@@ -578,9 +585,12 @@ def main():
     </style>
     """, unsafe_allow_html=True)
 
+    initialize_ui()
     st.title("🎬 Video and Playlist Processor")
 
     input_urls = st.text_input("Enter YouTube Playlist(s) or Video URL(s) or both (comma-separated):")
+     # Cookies file handling
+    cookies_file = upload_cookies()
 
     if 'stored_transcripts' not in st.session_state:
         st.session_state.stored_transcripts = []
@@ -593,30 +603,25 @@ def main():
 
         with col1:
             if st.button("Extract Transcripts"):
-                progress_bar = col2.progress(0, text="Starting transcript extraction. Please hold...")
-                status_text = col2.empty()
+                progress_bar = col2.progress(0, text="Starting transcript extraction Please Hold...")
+                status_text = col2.empty()  # Placeholder for dynamic status updates
 
-                try:
-                    st.session_state.stored_transcripts = process_input(input_urls)
-                    progress_bar.progress(50, text="Processing transcripts...")
-                    status_text.text("Processing transcripts...")
-                    progress_bar.progress(100, text="Transcripts extracted successfully.")
-                    status_text.text("Transcripts extracted successfully.")
-
-                    if st.session_state.stored_transcripts:
-                        transcript_text = ""
-                        for video in st.session_state.stored_transcripts:
-                            transcript_text += f"\nTranscript for video {video['video_url']}:\n"
-                            if isinstance(video['transcript'], list):
-                                for line in video['transcript']:
-                                    transcript_text += line + "\n"
-                            else:
-                                transcript_text += video['transcript'] + "\n"
-                            transcript_text += "-" * 50 + "\n"
-                        st.session_state.transcript_text = transcript_text
-                except Exception as e:
-                    st.error(f"Error extracting transcripts: {e}")
-                    logging.error(f"Error extracting transcripts: {e}")
+                st.session_state.stored_transcripts = process_input(input_urls)
+                progress_bar.progress(50, text="Processing transcripts...")
+                status_text.text("Processing transcripts...")
+                progress_bar.progress(100, text="Transcripts extracted successfully.")
+                status_text.text("Transcripts extracted successfully.")
+                if st.session_state.stored_transcripts:
+                    transcript_text = ""
+                    for video in st.session_state.stored_transcripts:
+                        transcript_text += f"\nTranscript for video {video['video_url']}:\n"
+                        if isinstance(video['transcript'], list):
+                            for line in video['transcript']:
+                                transcript_text += line + "\n"
+                        else:
+                            transcript_text += video['transcript'] + "\n"
+                        transcript_text += "-" * 50 + "\n"
+                    st.session_state.transcript_text = transcript_text
 
     if st.session_state.transcript_text:
         st.subheader("Extracted Transcripts")
@@ -632,20 +637,15 @@ def main():
                 progress_bar = col2.progress(0, text="Starting query processing...")
                 status_text = col2.empty()
 
-                try:
-                    relevant_sections = process_query(query, st.session_state.stored_transcripts)
-                    progress_bar.progress(50, text="Analyzing query...")
-                    status_text.text("Analyzing query...")
-                    progress_bar.progress(100, text="Query processed successfully.")
-                    status_text.text("Query processed successfully.")
-
-                    if relevant_sections:
-                        st.session_state.query_output = "\n".join(relevant_sections)
-                    else:
-                        st.session_state.query_output = "No relevant content found for the query."
-                except Exception as e:
-                    st.error(f"Error processing query: {e}")
-                    logging.error(f"Error processing query: {e}")
+                relevant_sections = process_query(query, st.session_state.stored_transcripts)
+                progress_bar.progress(50, text="Analyzing query...")
+                status_text.text("Analyzing query...")
+                progress_bar.progress(100, text="Query processed successfully.")
+                status_text.text("Query processed successfully.")
+                if relevant_sections:
+                    st.session_state.query_output = "\n".join(relevant_sections)
+                else:
+                    st.session_state.query_output = "No relevant content found for the query."
 
     if 'query_output' in st.session_state and st.session_state.query_output:
         st.subheader("Relevant Output for Your Query")
@@ -660,31 +660,28 @@ def main():
             progress_bar = col2.progress(0, text="Starting combine and play...")
             status_text = col2.empty()
 
-            try:
-                for video in st.session_state.stored_transcripts:
-                    video_url = video['video_url']
-                    video_file = download_video(video_url)
-                    if not video_file:
-                        st.warning(f"Skipping video {video_url} due to download failure.")
+            for video in st.session_state.stored_transcripts:
+                video_url = video['video_url']
+                video_file = download_video(video_urlvideo['video_url'], cookies_file)
+                if not video_file:
+                    st.warning(f"Skipping video {video_url} due to download failure.")
+                else:
+                    status_text.text("Downloading video...")
+                    video_file = download_video(url, cookies_file)
+                    progress_bar.progress(50, text="Video downloaded successfully...")
+                    status_text.text("Processing will take some time \n Please Have Patience...")
+                    st.success(f"Video downloaded successfully: {video_file}")
+                    query_output = st.session_state.query_output.split("\n") if st.session_state.query_output else []
+                    edited_video_path = edit_video_using_query(video_file, query_output, "ffmpeg")
+                    if edited_video_path:
+                        progress_bar.progress(100, text="Video combined and ready.")
+                        status_text.text("Video combined and ready.")
+                        st.success(f"Edited video saved at: {edited_video_path}")
+                        print('Final Video Created')
+                        st.video(edited_video_path)
+                        st.session_state.processing_in_progress = False
                     else:
-                        status_text.text("Downloading video...")
-                        progress_bar.progress(50, text="Video downloaded successfully...")
-                        status_text.text("Processing will take some time. Please be patient...")
-                        st.success(f"Video downloaded successfully: {video_file}")
-                        query_output = st.session_state.query_output.split("\n") if st.session_state.query_output else []
-                        edited_video_path = edit_video_using_query(video_file, query_output, "ffmpeg")
-                        if edited_video_path:
-                            progress_bar.progress(100, text="Video combined and ready.")
-                            status_text.text("Video combined and ready.")
-                            st.success(f"Edited video saved at: {edited_video_path}")
-                            print('Final Video Created')
-                            st.video(edited_video_path)
-                            st.session_state.processing_in_progress = False
-                        else:
-                            st.warning("No video could be edited from the query output.")
-            except Exception as e:
-                st.error(f"Error in video processing: {e}")
-                logging.error(f"Error in video processing: {e}")
+                        st.warning("No video could be edited from the query output.")
 
     if st.button("Process Another Playlist/Video"):
         st.session_state.stored_transcripts = []
