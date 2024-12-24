@@ -16,13 +16,14 @@ logging.basicConfig(level=logging.INFO)
 
 # Set up Streamlit page
 def initialize_ui():
-    st.sidebar.header("Upload Your Cookies File \n (Open Chrome and go to the YouTube page you want to download from (make sure you're logged in).\n
+    st.sidebar.header("""Upload Your Cookies File \n (Open Chrome and go to the YouTube page you want to download from (make sure you're logged in).\n
 Press F12 or Ctrl + Shift + I (Windows) or Cmd + Option + I (Mac) to open Developer Tools.\n
 Alternatively, you can right-click anywhere on the webpage and select Inspect or Inspect Element.\n
 Go to the Application tab and find Cookies on the left-hand menu under Storage.\n
 Click on the Cookies item and find the relevant entries for YouTube.\n
 Export these cookies using a browser extension like EditThisCookie or another cookie-exporting tool.\n
-Save the cookies to a file, for example, cookies.txt")
+Save the cookies to a file, for example, cookies.txt""")
+
     
 
 # Upload cookies file
