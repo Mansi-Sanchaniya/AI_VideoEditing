@@ -67,7 +67,7 @@ def download_video(video_url, cookies_file, output_dir="downloads"):
     output_file_template = os.path.join(output_dir, '%(title)s.%(ext)s')
 
     ydl_opts = {
-        'ffmpeg_location': 'AI_VideoEditing/bin/ffmpeg',
+        'ffmpeg_location': './AI_VideoEditing/bin/ffmpeg',
         'outtmpl': output_file_template,
         'format': 'bestvideo+bestaudio/best',
         'quiet': True,
