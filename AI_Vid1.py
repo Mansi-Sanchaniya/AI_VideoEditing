@@ -15,6 +15,10 @@ import urllib.request
 import requests
 from moviepy.editor import VideoFileClip, concatenate_videoclips
 
+with st.spinner("Processing, please wait..."):
+    # Long-running task
+    time.sleep(10)
+
 # Function to convert cookies into Netscape format for yt-dlp
 def convert_to_netscape(cookies_file):
     if cookies_file.name.endswith('.json'):
