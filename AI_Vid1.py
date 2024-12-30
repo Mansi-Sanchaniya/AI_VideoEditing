@@ -89,23 +89,18 @@ def download_video(video_url, cookies_file, output_dir="downloads"):
         return None
 
 
+# Get transcript for a video
 def get_transcript(video_url):
-    # Extract video ID from URL
     video_id = video_url.split("v=")[-1]
-
     try:
-        # Try to fetch the transcript for the given video ID
         transcript = YouTubeTranscriptApi.get_transcript(video_id)
         return transcript
-    except NoTranscriptFound:
-        # If no transcript is found for the video
-        return f"Transcript not available for video: {video_url}."
-    except TranscriptsDisabled:
-        # If transcripts are disabled for the video
-        return f"Transcripts are disabled for video: {video_url}."
+    except (NoTranscriptFound, TranscriptsDisabled):
+        st.warning(f"Transcript not available for video: {video_url}.")
+        return None
     except Exception as e:
-        # Any other exceptions (e.g., network issues)
-        return f"Error fetching transcript for video {video_url}: {str(e)}"
+        st.warning(f"Error fetching transcript for video: {video_url}. {e}")
+        return None
 
 
 # Format transcript
