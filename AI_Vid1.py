@@ -182,6 +182,29 @@ def edit_video(video_file, relevant_sections):
     else:
         return None
 
+def extract_timestamps_from_section(section):
+    try:
+        section = section.strip()
+
+        if '[' not in section or ']' not in section:
+            return None
+
+        timestamp_part = section[section.find('[') + 1:section.find(']')].strip()
+        times = timestamp_part.split(" - ")
+
+        if len(times) != 2:
+            return None
+
+        start_time = float(times[0].strip().replace("s", ""))
+        end_time = float(times[1].strip().replace("s", ""))
+
+        start_time = round(start_time, 2)
+        end_time = round(end_time, 2)
+
+        return start_time, end_time
+    except Exception as e:
+        return None
+
 # Extract clip using MoviePy
 def extract_clip_with_moviepy(video_file, start_time, end_time, temp_dir):
     try:
