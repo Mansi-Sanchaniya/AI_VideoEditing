@@ -61,12 +61,11 @@ def download_video(video_url, cookies_file, output_dir="downloads"):
     output_file_template = os.path.join(output_dir, '%(title)s.%(ext)s')
 
     ydl_opts = {
-        'ffmpeg_location': './AI_VideoEditing/bin/ffmpeg',
         'outtmpl': output_file_template,
-        'format': 'bestvideo+bestaudio/best',
+        'format': 'bestvideo+bestaudio/best',  # This ensures you get the best quality video and audio
         'quiet': True,
         'no_warnings': True,
-        'cookiefile': cookies_file
+        'cookiefile': cookies_file  # Use cookies if necessary
     }
 
     try:
@@ -82,6 +81,7 @@ def download_video(video_url, cookies_file, output_dir="downloads"):
     except Exception as e:
         st.error(f"Error downloading video: {video_url}. {e}")
         return None
+
 
 # Get transcript for a video
 def get_transcript(video_url, cookies_file):
@@ -282,8 +282,13 @@ if __name__ == "__main__":
             transcripts = process_input(user_input, cookies_path)
             relevant_sections = process_query(query, transcripts)
             if relevant_sections:
-                video_path = edit_video('video.mp4', relevant_sections)
+                video_path = download_video(user_input, cookies_path)  # Ensure the video is downloaded before editing
                 if video_path:
-                    st.video(video_path)
+                    edited_video_path = edit_video(video_path, relevant_sections)
+                    if edited_video_path:
+                        st.video(edited_video_path)
+                    else:
+                        st.error("Failed to create the video.")
                 else:
-                    st.error("Failed to create the video.")
+                    st.error("Failed to download the video.")
+
