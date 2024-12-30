@@ -256,6 +256,7 @@ def merge_clips_with_ffmpeg(clips, output_file):
         pass
 
 
+# Process and display the results for each video
 if __name__ == "__main__":
     st.title("Video Playlist Processor")
 
@@ -277,7 +278,8 @@ if __name__ == "__main__":
             if transcripts:
                 for transcript in transcripts:
                     st.write(f"Video: {transcript['video_url']}")
-                    st.text_area("Transcript", "\n".join(transcript['transcript']), height=300)
+                    # Use the video URL or part of it as a unique key
+                    st.text_area("Transcript", "\n".join(transcript['transcript']), height=300, key=transcript['video_url'])
 
     query = st.text_input("Enter your query:")
     if st.button("Search Transcripts"):
