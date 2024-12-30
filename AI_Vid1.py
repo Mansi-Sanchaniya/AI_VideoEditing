@@ -89,15 +89,23 @@ def download_video(video_url, cookies_file, output_dir="downloads"):
         return None
 
 
-# Get transcript for a video
-def get_transcript(video_url):
-    video_id = video_url.split("v=")[-1]
+# Get transcript using yt-dlp (with cookies)
+def get_transcript_using_yt_dlp(video_url, cookies_file):
+    ydl_opts = {
+        'quiet': True,
+        'no_warnings': True,
+        'cookiefile': cookies_file,
+    }
+    
     try:
-        transcript = YouTubeTranscriptApi.get_transcript(video_id)
-        return transcript
-    except (NoTranscriptFound, TranscriptsDisabled):
-        st.warning(f"Transcript not available for video: {video_url}.")
-        return None
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(video_url, download=False)
+            transcript = info_dict.get('automatic_captions', {}).get('en', [])
+            if transcript:
+                return transcript
+            else:
+                st.warning(f"Transcript not available for video: {video_url}.")
+                return None
     except Exception as e:
         st.warning(f"Error fetching transcript for video: {video_url}. {e}")
         return None
@@ -115,7 +123,7 @@ def format_transcript(transcript):
 
 
 # Process input and fetch transcripts
-def process_input(input_urls):
+def process_input(input_urls, cookies_file):
     video_urls = get_video_urls_multiple(input_urls)
     if not video_urls:
         st.warning("No valid video URLs provided.")
@@ -125,7 +133,7 @@ def process_input(input_urls):
     video_chunks = {}
 
     with ThreadPoolExecutor(max_workers=10) as transcript_executor:
-        future_to_video = {transcript_executor.submit(get_transcript, video_url): video_url for video_url in video_urls}
+        future_to_video = {transcript_executor.submit(get_transcript_using_yt_dlp, video_url, cookies_file): video_url for video_url in video_urls}
         for future in as_completed(future_to_video):
             video_url = future_to_video[future]
             try:
@@ -274,7 +282,7 @@ if __name__ == "__main__":
         if not cookies_file:
             st.warning("Please upload a cookies file.")
         else:
-            transcripts = process_input(user_input)
+            transcripts = process_input(user_input, cookies_path)
             if transcripts:
                 for transcript in transcripts:
                     st.write(f"Video: {transcript['video_url']}")
@@ -286,7 +294,7 @@ if __name__ == "__main__":
         if not cookies_file:
             st.warning("Please upload a cookies file.")
         else:
-            transcripts = process_input(user_input)
+            transcripts = process_input(user_input, cookies_path)
             if transcripts:
                 results = process_query(query, transcripts)
                 st.text_area("Query Results", "\n".join(results), height=300)
@@ -295,7 +303,7 @@ if __name__ == "__main__":
         if not cookies_file:
             st.warning("Please upload a cookies file.")
         else:
-            transcripts = process_input(user_input)
+            transcripts = process_input(user_input, cookies_path)
             results = process_query(query, transcripts)
             if results:
                 for video in transcripts:
