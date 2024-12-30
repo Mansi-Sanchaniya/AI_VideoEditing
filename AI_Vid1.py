@@ -196,6 +196,7 @@ def edit_video(video_file, relevant_sections):
 
     for section in relevant_sections:
         start_time, end_time = extract_timestamps_from_section(section)
+        print(f"Start time: {start_time}, End time: {end_time}")
         if start_time and end_time:
             clip = extract_clip_with_moviepy(video_file, start_time, end_time, temp_dir)
             if clip:
@@ -269,3 +270,8 @@ if __name__ == "__main__":
             relevant_sections = process_query(query, transcripts)
             if relevant_sections:
                 st.video(edit_video('video.mp4', relevant_sections))
+                if video_path:
+                    st.video(video_path)
+                else:
+                    st.error("Failed to create the video.")
+
