@@ -59,7 +59,7 @@ def download_video(video_url, cookies_file, output_dir="downloads"):
 
     ydl_opts = {
         'outtmpl': output_file_template,
-        'format': 'bestvideo+bestaudio/best',  # This ensures you get the best quality video and audio
+        'format': 'best',  # This ensures you get the best quality video and audio
         'quiet': True,
         'no_warnings': True,
         'cookiefile': cookies_file  # Use cookies if necessary
