@@ -115,7 +115,7 @@ def process_input(input_urls, cookies_file):
 
     with ThreadPoolExecutor(max_workers=10) as transcript_executor:
         future_to_video = {transcript_executor.submit(get_transcript, video_url, cookies_file): video_url for video_url in video_urls}
-        for future in as_completed(future_to_video):
+        for future in as_completed(future_to_video, timeout=timeout):
             video_url = future_to_video[future]
             try:
                 transcript = future.result()
@@ -125,6 +125,9 @@ def process_input(input_urls, cookies_file):
                     print(f"Processed transcript for video: {video_url}")
                 else:
                     video_chunks[video_url] = ["Transcript not available"]
+            except TimeoutError:
+                video_chunks[video_url] = ["Transcript extraction timed out"]
+                st.warning(f"Timeout reached while processing video: {video_url}")
             except Exception as e:
                 video_chunks[video_url] = ["Transcript extraction failed"]
 
