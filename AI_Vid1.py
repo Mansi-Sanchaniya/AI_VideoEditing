@@ -228,6 +228,18 @@ def merge_clips_with_moviepy(clips, output_file):
     except Exception as e:
         pass
 
+
+# Function to display video
+def display_video(video_path):
+    try:
+        with open(video_path, "rb") as video_file:
+            video_bytes = video_file.read()
+        st.video(video_bytes)
+        print(f"Video is ready for display: {video_path}")
+    except Exception as e:
+        st.error(f"Error displaying video: {e}")
+
+
 # Process and display the results for each video
 if __name__ == "__main__":
     st.title("Video Playlist Processor")
@@ -272,7 +284,6 @@ if __name__ == "__main__":
             if relevant_sections:
                 video_path = edit_video('video.mp4', relevant_sections)
                 if video_path:
-                    st.video(video_path)
+                    display_video(video_path)
                 else:
                     st.error("Failed to create the video.")
-
