@@ -13,51 +13,41 @@ import time
 from http.cookiejar import CookieJar
 import urllib.request
 import requests
+from moviepy.editor import VideoFileClip, concatenate_videoclips
 
 # Function to convert cookies into Netscape format for yt-dlp
 def convert_to_netscape(cookies_file):
-    # Check if the cookie file is in JSON format
     if cookies_file.name.endswith('.json'):
         cookies_data = json.load(cookies_file)
-
-        # Convert JSON data to Netscape format
         netscape_cookies = []
         for cookie in cookies_data:
             netscape_cookies.append(
                 f"{cookie['domain']}\t{cookie['httpOnly']}\t{cookie['secure']}\t{cookie['expiry']}\t{cookie['name']}\t{cookie['value']}")
-
-        # Write the Netscape cookies to a temporary file
         netscape_filename = os.path.join(os.path.dirname(cookies_file.name), "cookies_netscape.txt")
         with open(netscape_filename, "w") as netscape_file:
             for cookie in netscape_cookies:
                 netscape_file.write(f"{cookie}\n")
-
         return netscape_filename
-
-    # If it's not JSON, let's try the normal approach for txt (assuming it's already in Netscape format)
     elif cookies_file.name.endswith('.txt'):
-        return cookies_file.name  # Assuming the txt file is already in Netscape format
-
+        return cookies_file.name
     else:
         raise ValueError("Unsupported cookie file format. Please upload a .json or .txt file.")
-
 
 # Function to get video URLs from multiple playlists or individual video links
 def get_video_urls_multiple(input_urls):
     video_urls = []
-    urls = input_urls.split(",")  # Split input by comma
+    urls = input_urls.split(",")
     for url in urls:
-        url = url.strip()  # Remove any leading/trailing spaces
+        url = url.strip()
         if "playlist" in url:
             try:
                 playlist = Playlist(url)
-                video_urls.extend(playlist.video_urls)  # Add all video URLs in the playlist
+                video_urls.extend(playlist.video_urls)
             except Exception as e:
                 st.error(f"Error processing playlist URL: {url}. {e}")
         else:
-            video_urls.append(url)  # Treat as a single video URL
+            video_urls.append(url)
     return video_urls
-
 
 # Download video using yt_dlp
 def download_video(video_url, cookies_file, output_dir="downloads"):
@@ -79,7 +69,6 @@ def download_video(video_url, cookies_file, output_dir="downloads"):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(video_url, download=True)
             filename = ydl.prepare_filename(info_dict)
-
             if filename and os.path.exists(filename):
                 return filename
             else:
@@ -87,7 +76,6 @@ def download_video(video_url, cookies_file, output_dir="downloads"):
     except Exception as e:
         st.error(f"Error downloading video: {video_url}. {e}")
         return None
-
 
 # Get transcript for a video
 def get_transcript(video_url, cookies_file):
@@ -102,7 +90,6 @@ def get_transcript(video_url, cookies_file):
         st.warning(f"Error fetching transcript for video: {video_url}. {e}")
         return None
 
-
 # Format transcript
 def format_transcript(transcript):
     formatted_transcript = []
@@ -112,7 +99,6 @@ def format_transcript(transcript):
         text = entry['text']
         formatted_transcript.append(f"[{start_time}s - {start_time + duration}s] {text}")
     return formatted_transcript
-
 
 # Process input and fetch transcripts
 def process_input(input_urls, cookies_file):
@@ -140,10 +126,8 @@ def process_input(input_urls, cookies_file):
 
     for video_url in video_urls:
         all_transcripts.append(
-            {"video_url": video_url, "transcript": video_chunks.get(video_url, ["No transcript found"])}
-        )
+            {"video_url": video_url, "transcript": video_chunks.get(video_url, ["No transcript found"])})
     return all_transcripts
-
 
 # Process query
 def process_query(query, stored_transcripts, threshold=0.3):
@@ -176,8 +160,7 @@ def process_query(query, stored_transcripts, threshold=0.3):
 
     return relevant_sections
 
-
-# Video editing
+# Video editing using MoviePy
 def edit_video(video_file, relevant_sections):
     if not relevant_sections:
         return None
@@ -185,76 +168,38 @@ def edit_video(video_file, relevant_sections):
     clips = []
     temp_dir = tempfile.mkdtemp()
 
-    with ThreadPoolExecutor(max_workers=5) as clip_executor:
-        future_to_clip = {
-            clip_executor.submit(extract_clip_with_ffmpeg, video_file, *extract_timestamps_from_section(section), temp_dir): section
-            for section in relevant_sections
-            if extract_timestamps_from_section(section)
-        }
-        for future in as_completed(future_to_clip):
-            clip_segment = future.result()
-            if clip_segment:
-                clips.append(clip_segment)
+    for section in relevant_sections:
+        start_time, end_time = extract_timestamps_from_section(section)
+        if start_time and end_time:
+            clip = extract_clip_with_moviepy(video_file, start_time, end_time, temp_dir)
+            if clip:
+                clips.append(clip)
 
     if clips:
         final_video_path = os.path.join(temp_dir, "edited_video.mp4")
-        merge_clips_with_ffmpeg(clips, final_video_path)
+        merge_clips_with_moviepy(clips, final_video_path)
         return final_video_path
     else:
         return None
 
-
-# Extract timestamps from section
-def extract_timestamps_from_section(section):
+# Extract clip using MoviePy
+def extract_clip_with_moviepy(video_file, start_time, end_time, temp_dir):
     try:
-        section = section.strip()
-
-        if '[' not in section or ']' not in section:
-            return None
-
-        timestamp_part = section[section.find('[') + 1:section.find(']')].strip()
-        times = timestamp_part.split(" - ")
-
-        if len(times) != 2:
-            return None
-
-        start_time = float(times[0].strip().replace("s", ""))
-        end_time = float(times[1].strip().replace("s", ""))
-
-        start_time = round(start_time, 2)
-        end_time = round(end_time, 2)
-
-        return start_time, end_time
-    except Exception as e:
-        return None
-
-
-# Extract clip using FFmpeg
-def extract_clip_with_ffmpeg(video_file, start_time, end_time, temp_dir):
-    try:
+        video = VideoFileClip(video_file)
+        clip = video.subclip(start_time, end_time)
         temp_output = os.path.join(temp_dir, f"temp_{start_time}_{end_time}.mp4")
-        subprocess.run(
-            ["ffmpeg", "-i", video_file, "-ss", str(start_time), "-to", str(end_time),
-             "-c:v", "libx264", "-c:a", "aac", "-strict", "experimental", "-async", "1", temp_output],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        clip.write_videofile(temp_output, codec="libx264", audio_codec="aac", threads=4)
         return temp_output
     except Exception as e:
         return None
 
-
-# Merge clips using FFmpeg
-def merge_clips_with_ffmpeg(clips, output_file):
+# Merge clips using MoviePy
+def merge_clips_with_moviepy(clips, output_file):
     try:
-        with open("temp_clips.txt", "w") as f:
-            for clip in clips:
-                f.write(f"file '{clip}'\n")
-
-        subprocess.run(
-            ["ffmpeg", "-f", "concat", "-safe", "0", "-i", "temp_clips.txt", "-c", "copy", output_file],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        final_video = concatenate_videoclips(clips)
+        final_video.write_videofile(output_file, codec="libx264", audio_codec="aac", threads=4)
     except Exception as e:
         pass
-
 
 # Process and display the results for each video
 if __name__ == "__main__":
@@ -278,7 +223,6 @@ if __name__ == "__main__":
             if transcripts:
                 for transcript in transcripts:
                     st.write(f"Video: {transcript['video_url']}")
-                    # Use the video URL or part of it as a unique key
                     st.text_area("Transcript", "\n".join(transcript['transcript']), height=300, key=transcript['video_url'])
 
     query = st.text_input("Enter your query:")
@@ -296,12 +240,6 @@ if __name__ == "__main__":
             st.warning("Please upload a cookies file.")
         else:
             transcripts = process_input(user_input, cookies_path)
-            results = process_query(query, transcripts)
-            if results:
-                for video in transcripts:
-                    video_path = download_video(video['video_url'], cookies_path)
-                    if video_path:
-                        edited_video = edit_video(video_path, results)
-                        if edited_video:
-                            st.success(f"Video created successfully: {edited_video}")
-                            st.video(edited_video)
+            relevant_sections = process_query(query, transcripts)
+            if relevant_sections:
+                st.video(edit_video('video.mp4', relevant_sections))
