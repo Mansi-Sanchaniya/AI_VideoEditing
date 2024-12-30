@@ -89,23 +89,33 @@ def download_video(video_url, cookies_file, output_dir="downloads"):
         return None
 
 
-# Get transcript using yt-dlp (with cookies)
-def get_transcript_using_yt_dlp(video_url, cookies_file):
-    ydl_opts = {
-        'quiet': True,
-        'no_warnings': True,
-        'cookiefile': cookies_file,
+# Get transcript for a video using YouTubeTranscriptApi and cookies
+def get_transcript(video_url, cookies_file):
+    video_id = video_url.split("v=")[-1]
+
+    # Use requests with the cookies to fetch the transcript
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
     }
-    
+
+    cookies = {}
+    if cookies_file:
+        with open(cookies_file, 'r') as file:
+            for line in file:
+                # Parsing Netscape format cookies
+                if line.startswith('#') or line.strip() == "":
+                    continue
+                parts = line.strip().split('\t')
+                if len(parts) >= 7:
+                    cookie = parts[5]  # Get cookie value
+                    cookies[parts[4]] = cookie  # Save cookie by its name
+
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(video_url, download=False)
-            transcript = info_dict.get('automatic_captions', {}).get('en', [])
-            if transcript:
-                return transcript
-            else:
-                st.warning(f"Transcript not available for video: {video_url}.")
-                return None
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, cookies=cookies)
+        return transcript
+    except (NoTranscriptFound, TranscriptsDisabled):
+        st.warning(f"Transcript not available for video: {video_url}.")
+        return None
     except Exception as e:
         st.warning(f"Error fetching transcript for video: {video_url}. {e}")
         return None
