@@ -160,27 +160,6 @@ def process_query(query, stored_transcripts, threshold=0.3):
 
     return relevant_sections
 
-# Video editing using MoviePy
-def edit_video(video_file, relevant_sections):
-    if not relevant_sections:
-        return None
-
-    clips = []
-    temp_dir = tempfile.mkdtemp()
-
-    for section in relevant_sections:
-        start_time, end_time = extract_timestamps_from_section(section)
-        if start_time and end_time:
-            clip = extract_clip_with_moviepy(video_file, start_time, end_time, temp_dir)
-            if clip:
-                clips.append(clip)
-
-    if clips:
-        final_video_path = os.path.join(temp_dir, "edited_video.mp4")
-        merge_clips_with_moviepy(clips, final_video_path)
-        return final_video_path
-    else:
-        return None
 
 def extract_timestamps_from_section(section):
     try:
@@ -203,6 +182,30 @@ def extract_timestamps_from_section(section):
 
         return start_time, end_time
     except Exception as e:
+        return None
+
+
+
+# Video editing using MoviePy
+def edit_video(video_file, relevant_sections):
+    if not relevant_sections:
+        return None
+
+    clips = []
+    temp_dir = tempfile.mkdtemp()
+
+    for section in relevant_sections:
+        start_time, end_time = extract_timestamps_from_section(section)
+        if start_time and end_time:
+            clip = extract_clip_with_moviepy(video_file, start_time, end_time, temp_dir)
+            if clip:
+                clips.append(clip)
+
+    if clips:
+        final_video_path = os.path.join(temp_dir, "edited_video.mp4")
+        merge_clips_with_moviepy(clips, final_video_path)
+        return final_video_path
+    else:
         return None
 
 # Extract clip using MoviePy
