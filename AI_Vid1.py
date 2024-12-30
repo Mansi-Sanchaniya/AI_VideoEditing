@@ -74,8 +74,10 @@ def download_video(video_url, cookies_file, output_dir="downloads"):
             info_dict = ydl.extract_info(video_url, download=True)
             filename = ydl.prepare_filename(info_dict)
             if filename and os.path.exists(filename):
+                print(f"Downloaded video: {filename}")
                 return filename
             else:
+                print(f"Failed to download video: {video_url}")
                 return None
     except Exception as e:
         st.error(f"Error downloading video: {video_url}. {e}")
@@ -123,6 +125,7 @@ def process_input(input_urls, cookies_file):
                 if transcript:
                     formatted_transcript = format_transcript(transcript)
                     video_chunks[video_url] = formatted_transcript
+                    print(f"Processed transcript for video: {video_url}")
                 else:
                     video_chunks[video_url] = ["Transcript not available"]
             except Exception as e:
@@ -197,6 +200,7 @@ def edit_video(video_file, relevant_sections):
 
     clips = []
     temp_dir = tempfile.mkdtemp()
+    print(f"Created temporary directory for clips: {temp_dir}")
 
     for section in relevant_sections:
         start_time, end_time = extract_timestamps_from_section(section)
@@ -209,6 +213,7 @@ def edit_video(video_file, relevant_sections):
     if clips:
         final_video_path = os.path.join(temp_dir, "edited_video.mp4")
         merge_clips_with_moviepy(clips, final_video_path)
+        print(f"Final edited video saved at: {final_video_path}")
         return final_video_path
     else:
         return None
@@ -220,6 +225,7 @@ def extract_clip_with_moviepy(video_file, start_time, end_time, temp_dir):
         clip = video.subclip(start_time, end_time)
         temp_output = os.path.join(temp_dir, f"temp_{start_time}_{end_time}.mp4")
         clip.write_videofile(temp_output, codec="libx264", audio_codec="aac", threads=4)
+        print(f"Extracted clip from {start_time}s to {end_time}s: {temp_output}")
         return temp_output
     except Exception as e:
         return None
@@ -229,19 +235,9 @@ def merge_clips_with_moviepy(clips, output_file):
     try:
         final_video = concatenate_videoclips(clips)
         final_video.write_videofile(output_file, codec="libx264", audio_codec="aac", threads=4)
+        print(f"Merged clips into final video: {output_file}")
     except Exception as e:
         pass
-
-
-# Function to display video
-def display_video(video_path):
-    try:
-        with open(video_path, "rb") as video_file:
-            video_bytes = video_file.read()
-        st.video(video_bytes)
-        print(f"Video is ready for display: {video_path}")
-    except Exception as e:
-        st.error(f"Error displaying video: {e}")
 
 
 # Process and display the results for each video
@@ -288,6 +284,6 @@ if __name__ == "__main__":
             if relevant_sections:
                 video_path = edit_video('video.mp4', relevant_sections)
                 if video_path:
-                    display_video(video_path)
+                    st.video(video_path)
                 else:
                     st.error("Failed to create the video.")
