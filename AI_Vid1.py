@@ -89,29 +89,11 @@ def download_video(video_url, cookies_file, output_dir="downloads"):
         return None
 
 
-# Get transcript for a video using YouTubeTranscriptApi and cookies
+# Get transcript for a video
 def get_transcript(video_url, cookies_file):
     video_id = video_url.split("v=")[-1]
-
-    # Use requests with the cookies to fetch the transcript
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3',
-    }
-
-    cookies = {}
-    if cookies_file:
-        with open(cookies_file, 'r') as file:
-            for line in file:
-                # Parsing Netscape format cookies
-                if line.startswith('#') or line.strip() == "":
-                    continue
-                parts = line.strip().split('\t')
-                if len(parts) >= 7:
-                    cookie = parts[5]  # Get cookie value
-                    cookies[parts[4]] = cookie  # Save cookie by its name
-
     try:
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, cookies=cookies)
+        transcript = YouTubeTranscriptApi.get_transcript(video_id, cookies=cookies_file)
         return transcript
     except (NoTranscriptFound, TranscriptsDisabled):
         st.warning(f"Transcript not available for video: {video_url}.")
@@ -143,7 +125,7 @@ def process_input(input_urls, cookies_file):
     video_chunks = {}
 
     with ThreadPoolExecutor(max_workers=10) as transcript_executor:
-        future_to_video = {transcript_executor.submit(get_transcript_using_yt_dlp, video_url, cookies_file): video_url for video_url in video_urls}
+        future_to_video = {transcript_executor.submit(get_transcript, video_url, cookies_file): video_url for video_url in video_urls}
         for future in as_completed(future_to_video):
             video_url = future_to_video[future]
             try:
