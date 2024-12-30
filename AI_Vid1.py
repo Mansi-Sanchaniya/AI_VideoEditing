@@ -90,10 +90,10 @@ def download_video(video_url, cookies_file, output_dir="downloads"):
 
 
 # Get transcript for a video
-def get_transcript(video_url, cookies_file):
+def get_transcript(video_url):
     video_id = video_url.split("v=")[-1]
     try:
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, cookies=cookies_file)
+        transcript = YouTubeTranscriptApi.get_transcript(video_id)
         return transcript
     except (NoTranscriptFound, TranscriptsDisabled):
         st.warning(f"Transcript not available for video: {video_url}.")
@@ -115,7 +115,7 @@ def format_transcript(transcript):
 
 
 # Process input and fetch transcripts
-def process_input(input_urls, cookies_file):
+def process_input(input_urls):
     video_urls = get_video_urls_multiple(input_urls)
     if not video_urls:
         st.warning("No valid video URLs provided.")
@@ -125,7 +125,7 @@ def process_input(input_urls, cookies_file):
     video_chunks = {}
 
     with ThreadPoolExecutor(max_workers=10) as transcript_executor:
-        future_to_video = {transcript_executor.submit(get_transcript, video_url, cookies_file): video_url for video_url in video_urls}
+        future_to_video = {transcript_executor.submit(get_transcript, video_url): video_url for video_url in video_urls}
         for future in as_completed(future_to_video):
             video_url = future_to_video[future]
             try:
@@ -273,7 +273,7 @@ if __name__ == "__main__":
         if not cookies_file:
             st.warning("Please upload a cookies file.")
         else:
-            transcripts = process_input(user_input, cookies_path)
+            transcripts = process_input(user_input)
             if transcripts:
                 for transcript in transcripts:
                     st.write(f"Video: {transcript['video_url']}")
@@ -284,7 +284,7 @@ if __name__ == "__main__":
         if not cookies_file:
             st.warning("Please upload a cookies file.")
         else:
-            transcripts = process_input(user_input, cookies_path)
+            transcripts = process_input(user_input)
             if transcripts:
                 results = process_query(query, transcripts)
                 st.text_area("Query Results", "\n".join(results), height=300)
@@ -293,7 +293,7 @@ if __name__ == "__main__":
         if not cookies_file:
             st.warning("Please upload a cookies file.")
         else:
-            transcripts = process_input(user_input, cookies_path)
+            transcripts = process_input(user_input)
             results = process_query(query, transcripts)
             if results:
                 for video in transcripts:
