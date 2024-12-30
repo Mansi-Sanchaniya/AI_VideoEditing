@@ -262,18 +262,17 @@ if __name__ == "__main__":
                 results = process_query(query, transcripts)
                 st.text_area("Query Results", "\n".join(results), height=300)
 
+
     if st.button("Combine and Create Video"):
         if not cookies_file:
             st.warning("Please upload a cookies file.")
         else:
             transcripts = process_input(user_input, cookies_path)
-            results = process_query(query, transcripts)
-            if results:
-                for video in transcripts:
-                    video_path = download_video(video['video_url'], cookies_path)
-                    if video_path:
-                        edited_video = edit_video(video_path, results)
-                        if edited_video:
-                            st.success(f"Video created successfully: {edited_video}")
-                            st.video(edited_video)
+            relevant_sections = process_query(query, transcripts)
+            if relevant_sections:
+                video_path = edit_video('video.mp4', relevant_sections)
+                if video_path:
+                    st.video(video_path)
+                else:
+                    st.error("Failed to create the video.")
 
