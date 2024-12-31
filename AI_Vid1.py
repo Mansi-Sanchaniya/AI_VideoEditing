@@ -112,6 +112,7 @@ def process_input(input_urls, cookies_file):
 
     all_transcripts = []
     video_chunks = {}
+    timeout = 30
 
     with ThreadPoolExecutor(max_workers=10) as transcript_executor:
         future_to_video = {transcript_executor.submit(get_transcript, video_url, cookies_file): video_url for video_url in video_urls}
