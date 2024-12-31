@@ -103,7 +103,7 @@ def format_transcript(transcript):
         formatted_transcript.append(f"[{start_time}s - {start_time + duration}s] {text}")
     return formatted_transcript
 
-# Process input and fetch transcripts sequentially
+# Process input and fetch transcripts
 def process_input(input_urls, cookies_file, timeout=30):
     video_urls = get_video_urls_multiple(input_urls)
     if not video_urls:
@@ -113,25 +113,28 @@ def process_input(input_urls, cookies_file, timeout=30):
     all_transcripts = []
     video_chunks = {}
 
-    for video_url in video_urls:
-        try:
-            transcript = get_transcript(video_url, cookies_file)
-            if transcript:
-                formatted_transcript = format_transcript(transcript)
-                video_chunks[video_url] = formatted_transcript
-                print(f"Processed transcript for video: {video_url}")
-            else:
-                video_chunks[video_url] = ["Transcript not available"]
-        except Exception as e:
-            video_chunks[video_url] = ["Transcript extraction failed"]
-            st.warning(f"Error processing video: {video_url}. {e}")
+    with ThreadPoolExecutor(max_workers=10) as transcript_executor:
+        future_to_video = {transcript_executor.submit(get_transcript, video_url, cookies_file): video_url for video_url in video_urls}
+        for future in as_completed(future_to_video, timeout=timeout):
+            video_url = future_to_video[future]
+            try:
+                transcript = future.result()
+                if transcript:
+                    formatted_transcript = format_transcript(transcript)
+                    video_chunks[video_url] = formatted_transcript
+                    print(f"Processed transcript for video: {video_url}")
+                else:
+                    video_chunks[video_url] = ["Transcript not available"]
+            except TimeoutError:
+                video_chunks[video_url] = ["Transcript extraction timed out"]
+                st.warning(f"Timeout reached while processing video: {video_url}")
+            except Exception as e:
+                video_chunks[video_url] = ["Transcript extraction failed"]
 
     for video_url in video_urls:
         all_transcripts.append(
-            {"video_url": video_url, "transcript": video_chunks.get(video_url, ["No transcript found"])}
-        )
+            {"video_url": video_url, "transcript": video_chunks.get(video_url, ["No transcript found"])})
     return all_transcripts
-
 
 # Process query
 def process_query(query, stored_transcripts, threshold=0.3):
