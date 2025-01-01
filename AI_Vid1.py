@@ -19,14 +19,55 @@ process_button = st.sidebar.button("Process")
 # Prepare temporary directories
 if not os.path.exists("temp_videos"):
     os.makedirs("temp_videos")
+def convert_cookies_to_netscape(json_file_path, netscape_file_path):
+    """
+    Convert cookies from JSON format to Netscape format.
 
+    Args:
+        json_file_path (str): Path to the JSON file containing cookies.
+        netscape_file_path (str): Path where the Netscape-formatted cookies file will be saved.
+
+    Returns:
+        None
+    """
+    try:
+        # Load cookies from JSON file
+        with open(json_file_path, "r") as json_file:
+            cookies = json.load(json_file)
+
+        # Initialize MozillaCookieJar
+        cookie_jar = MozillaCookieJar(netscape_file_path)
+
+        for cookie in cookies:
+            cookie_jar.set_cookie(
+                cookie_jar.make_cookie(
+                    domain=cookie.get("domain"),
+                    name=cookie.get("name"),
+                    value=cookie.get("value"),
+                    path=cookie.get("path"),
+                    secure=cookie.get("secure", False),
+                    expires=cookie.get("expiry"),
+                )
+            )
+
+        # Save cookies in Netscape format
+        cookie_jar.save(ignore_discard=True, ignore_expires=True)
+        print(f"Cookies successfully converted to Netscape format and saved at {netscape_file_path}.")
+
+    except Exception as e:
+        print(f"An error occurred while converting cookies: {e}")
 # Convert cookies file to compatible format (if provided)
+
 def prepare_cookies(file):
     if file:
         with tempfile.NamedTemporaryFile(delete=False) as temp_cookie:
             temp_cookie.write(file.read())
-            return temp_cookie.name
+            # Convert the cookie file to Netscape format if necessary
+            netscape_cookie_path = temp_cookie.name + "_netscape"
+            convert_cookies_to_netscape(temp_cookie.name, netscape_cookie_path)
+            return netscape_cookie_path  # Return the Netscape format path
     return None
+
 
 # Extract video URLs from a playlist or single video
 @st.cache_data
