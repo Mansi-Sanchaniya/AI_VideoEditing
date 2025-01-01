@@ -1,7 +1,5 @@
 import streamlit as st
 import yt_dlp
-from pytube import Playlistimport streamlit as st
-import yt_dlp
 from pytube import Playlist
 from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound, TranscriptsDisabled
 from sklearn.feature_extraction.text import TfidfVectorizer
